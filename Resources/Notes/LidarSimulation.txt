@@ -1,0 +1,55 @@
+================================================
+     How the lidar sensor can be simulated
+================================================
+
+Given a robot with pose (x, y, theta) and SlamTec RPLIDAR-A1
+
+samplesPerRotation = samplingFrequency / rotationalSpeed;
+angularGranularity = samplesPerRotation / 360;
+
+theta corresponds to 0 degrees, measures clockwise
+
+1. Shoot a ray out the middle of every angular sector (based on angularGranularity)
+2. Find what wall that ray intersects with 
+3. Check range resolution and accuracy to perturb measurement
+4. Report noisy measurement with angle (if greater than 12, throw out)
+5. Repeat
+
+=================================================================
+
+Simulating Lidar Sensor
+- Specify your map with line segments
+- Parts of this are on chatgpt
+- Be aware of 
+
+1. For every angle, calculate the shortest distance by testing a rays intersection with every line segment (smallest t)
+
+Modify Ro between angles to account for motion.
+
+R(t) = Ro + RdT
+S(u) = a + u * (b - a) {0 <= u <= 1}
+
+D = (Bx - Ax)(-Rdy) - (By - Ay)(-Rdx)
+
+U = ((Rox - Ax)(-Rdy) - (Roy - Ay)(-Rdx)) / D
+
+T = ((Bx - Ax)(Roy - Ay) - (By - Ay)(Rox - Ax)) / D
+
+If D == 0, lines are parallel.
+
+If U is not between 0 and 1 (can be equal) then we didn't intersect the line during the segment.
+
+If T is less than 0, ray didn't hit it (hit it in the past haha)
+
+(Find smallest T!)
+
+2. Throw out any points where T < 0.15 m and T > 12 m
+
+3. Add noise to T based on accuracy
+
+4. Snap to resolution (rounding)
+
+
+Accuracy:
+
+(lower case sigma) Standard deviation is based on percent multiplied by distance

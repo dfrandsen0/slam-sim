@@ -1,0 +1,182 @@
+
+The following steps detail the Gmapping algorithm.
+Comments can be found in gmapping.cpp denoting functions associated with the steps.
+
+1. Particles are given by pose X, Y, Theta
+2. Move particles according to the motion model. Add noise.
+
+(If total odometry reading isn't above threshold, skip all future steps.)
+
+3. "Nudge" particles, using a capped local search to maximize likelihood field score. (Either hit cap of number-of-iterations or max-distance-nudged.) Check every direction, move pose to highest score, repeat.
+- (shelved) If it didn't move, shrink distance nudged.
+- (shelved) Use Bilinear Interpolation to determine weighted distance between the 4 cells surrounding the hit point, to find a likelihood field score.
+If scan matching fails, rely soley on motion model.
+
+4. Sample the neighborhood (every combination of delta changes in x, y, theta) and find L(k), normalization factor, and guass-mean for each sample (L(k) is equal to P(x|x-1, u) * P(z|x,m))
+
+5. Calculate the new weight of each particle, which is its old weight * normalization factor
+
+(skipped) 6. If new weight is 0 or rounds to 0, make pose simply based on raw odometry, and give a low penalty weight (caused impossible situation, like in a wall)
+
+7. Calculate the new pose as a an average center of gravity based on gauss-mean
+
+8. Normalize weights of particles
+
+9. If Neff is below a certain value (Neff threshold, like N/2) resample with replacement
+
+10. Resample via "low variance resampling", like a comb on a number line rather than darts at the number line
+
+11. After resample, reset all weights to 1/N to become a valid belief (note: we do NOT normalize particle weights if we don't resample)
+
+12. Update maps according to current sensor scan (don't update the same cell twice within one scan; hits trump misses)
+
+(13. Create render copy (graphics))
+
+scoring function: e^-(d^2 / (2*sigma^2))
+
+=============================================================================================
+
+When I created this doc, I found it helpful to go through an example. However, it's kind of
+  a lot of work to go through and clean up. It's included below in case it's useful, but it's
+  still a bit messy. Apologies for that.
+
+Nonetheless, it's a 1D example, where each cell of the occupancy grid is .5 wide, and there's
+  a wall between 8.25-8.75. Three particles, at poses 4, 5, and 6, are moved and then a scan
+  taken. The numbers are legit throughout.
+
+=============================================================================================
+
+
+
+
+1D Example (steps 2 through 9)
+
+world:		7.25-7.75 | 7.75-8.25 | 8.25 - 8.75 | 8.75 - 9.25 | 9.25 - 9.75
+		     0		0	    1		   0		0
+
+Particles:			4		5		6
+
+(2) move 1 forward		4.9		6.1		6.9
+     with noise
+
+------ build euclidean distance transform matrix using FH algorithm (see another note)
+
+looks like:	  (1^2)	      (0.5^2)	  (0^2)		...
+		   1		0.25	    0	 	  0.25		1
+
+Scan says "wall 2 away!"
+
+(3) "nudge" (compare 4.4, 5.4 with scoring function. Which did better with that scan? Move there. Repeat until capped iterations or distance bucket for this is 0.5, but it should/can be smaller)
+		score(4.4) < score(4.9) < score(5.4)
+      				5.4		6.6		6.4
+
+
+(4) pick neighbors to sample, and find the covariance matrix, (the sum of L(k), where L(k) = P(x | x-1, u)*P(z | x, m) )
+
+Let's start with 5.4
+Neighbors:			4.9		5.4		5.9
+P(Xt | Xt-1, u)		(scoring function using sigma based on sensor noise. This example, 0.2)
+
+(scoring function makes d = (xdiff)^2 + (ydiff^2) + (thetaErr)^2, where thetaErr = atan2(sin(thetaDiff), cos(thetaDiff))) -- see google doc
+(original position + movement) - particle = distance, put in to score with MOTION sigma and get:
+(4 + 1 = 5; 4.9-5; scored = 0.882)
+				0.882		.135		0
+
+other neighbors: 6.6:		6.1		6.6		7.1
+		 6.4:		5.9		6.4		6.9
+
+---------------------------------------------------------------------------------
+full matrix for P(x...)		0.882		.135		0
+				.882		.0111		0
+				0		.0111		.882
+---------------------------------------------------------------------------------
+P(Zt | Xt, m) (use euclidean transform!!!)
+first particle's samples again	4.9		5.4		5.9
+
+(determine, given this position, and the scan, what cell did it hit?)
+4.9 + 2 = 6.9, so cell 6.75 - 7.25
+(this cell has a euclidean distance (according to transform) of 2.25 (1.5^2), so we use that in our score with our SENSOR sigma )
+score(2.25) = ~0		0		0		0.45783
+
+---------------------------------------------------------------------------------
+full matrix for P(z...)		0		0		0.45783
+				0.45783		1		0.45783
+				0.45783		1		0.45783
+---------------------------------------------------------------------------------
+
+L(k) is each multiplied together, so P(x..)*P(z..) for a particular sample
+---------------------------------------------------------------------------------
+L(k's)				0		0		0
+				0.4038		0.0111		0
+				0		0.0111		0.4038
+---------------------------------------------------------------------------------
+Sum the samples of each		0
+   particle			0.4149
+				0.4149
+---------------------------------------------------------------------------------
+(6) Assign low weight to the 0:	0.02 <- sigma? or was that coincidence? still not sure when writing this. wouldn't that be unrelated?? 
+(5) other weights assigned by sum(L(k)) (covariance) * oldWeight. If our particles were originally equally weighted at 0.333, then the middle particle would be 0.4149*0.333 = 0.138
+all new weights:		0.02		0.138		0.138
+(8) And normalize for new weights:	0.068		0.466		0.466
+
+If you need to resample, use those normalized new weights!
+
+(7) New poses are weighted, center-of-gravity idea between the neighbors and their respective L(k)s.
+
+For the particle 6.6
+  with neighbors (since		6.1		6.6		7.1
+  5.4 was boring)				
+				
+(6.1*0.4038)+(6.6*0.0111)+(7.1*0)/0.4149 = 6.113376. This particle moves to 6.113376!
+
+Particle 5.4 was having a tough day, and had a sum of 0 :( so his pose relies on raw odometry: 4.9
+
+
+Final weights:			0.068		0.466		0.466
+Final poses:			4.9		6.113		6.113 <- woah! the math figured they're the same.
+
+(9) What is Neff? It's whether we need new particles or not. Is our population healthy?
+
+Neff = 1 / ( sum(final_weights^2))
+
+1 / (0.466^2 + 0.466^2 + 0.068^2) = 2.278
+Essentially, 2.278 particles are pulling their weights (representing as a whole: two excellent ones, one meh)
+
+
+====================================================================================================================================
+====================================================================================================================================
+							information needed
+====================================================================================================================================
+====================================================================================================================================
+
+Gmapping must track a history of moves, to update particles after they've been "nudged" correctly.
+
+As well, you must track the following:
+- where was this particle when you asked me to update?
+- point cloud with timestamp
+- Where was each particle when the timestamp ended
+- Where was each particle when the timestamp started
+
+
+====================================================================================================================================
+====================================================================================================================================
+						   Euclidean Distance Transform
+====================================================================================================================================
+====================================================================================================================================
+
+for(particle)
+
+Turn range/theta into x, y
+find min x,y and max x,y
+add safety to max x,y; subtract safety from min x,y
+pull all patches from min x,y to max x,y (plus the little on each end)
+flatten into 1D array
+pass to 2D transform
+pull d from distance transform
+Any d outside region is considered as if it hit the edge; either shorten ray or consider a miss.
+
+run local search
+scan neighbors and determine L(k)s, add to P(Z) and P(X) matricies
+
+
+

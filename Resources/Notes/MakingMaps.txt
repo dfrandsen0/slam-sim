@@ -1,0 +1,44 @@
+How to make a map:
+
+(Use maps 1/2/3 as a reference.)
+
+All coordinates are in millimeters. Currently, the config file allows
+  for up to 64 lines and up to 16 start locations. This can be changed
+  in the config.h file. All maps should fit in the world size, 12000
+  millimeters by 6750 millimeters.
+
+Maps are a list of line segments from point A to point B.
+  For instance:
+
+5 5 10 10
+
+Is a line from (5, 5) to (10, 10). Note, there are not commas,
+  just spaces. A new line separates each segment.
+
+I highly suggest your line segments at least surround the edges.
+  It's not technically required, but it's a good idea. Note that
+  lasers that go "off the board" or further than 12 meters will be
+  rejected. The size of the world is 12000 millimeters by 6750 millimeters.
+
+The grid for the world is centered, with (0, 0) in the center, the 
+  positive x-axis pointing right, and the positive y-axis pointing up.
+  The code handles the fact that the screen y-axis is flipped.
+
+After specifying all line segments, specify possible starting locations
+  like so:
+
+starts
+0 2100
+-3000 -1600
+
+This tells the code to start interpreting coordinates as potential start
+  locations. This example designates one at (0, 2100), and one at (-3000, -1600).
+  The code will start the robot by selecting a start location at random,
+  and then randomly picking a starting theta.
+
+If you toggle RANDOM_START off in the config file, it will select the first
+  start designated, with 0 theta. (pointing right)
+
+Maps must be named map#.txt. The code will take the number you give in the config
+  file and find that particular file name.
+  
