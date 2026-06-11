@@ -1,0 +1,5 @@
+# mingw32-make
+all: main
+
+main: main.cpp
+	g++ -Wall -Wconversion -o main.exe main.cpp AI\ai.cpp Graphics\graphics.cpp Graphics\renderPacket.cpp Listener\userInput.cpp Listener\listener.cpp Models\Lidar\pointCloud.cpp Models\Lidar\polarPoint.cpp Models\Lidar\sensorModel.cpp Models\Lidar\sensorPacket.cpp Models\motionModel.cpp Models\robotModel.cpp Simulator\simulator.cpp SLAMModels\EKF\ekf.cpp SLAMModels\Gmapping\gmapping.cpp SLAMModels\Gmapping\logField.cpp SLAMModels\Gmapping\particle.cpp SLAMModels\Gmapping\statePacket.cpp SLAMModels\MapRepresentation\occupancyGrid.cpp SLAMModels\MapRepresentation\poseRenderPacket.cpp SLAMModels\MapRepresentation\sector.cpp SLAMModels\Templates\slam.cpp Utilities\mathUtilities.cpp Utilities\utilities.cpp World\world.cpp World\map.cpp World\Objects\oline.cpp World\Objects\opoint.cpp  -ld2d1 -ldxguid -ldxgi -ld3d11 -lgdi32 -luser32 -ldwrite -lm
